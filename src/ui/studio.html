@@ -51,8 +51,7 @@
         <div class="title-wrap">
           <input id="nameInput" class="name-input" placeholder="规则名称" spellcheck="false" />
           <div class="id-line">
-            <code id="idText">-</code>
-            <button class="link" id="renameBtn">改 id</button>
+            <code id="idText" title="点击复制 id">-</code>
             <span class="saved" id="savedHint"></span>
           </div>
         </div>
@@ -179,9 +178,14 @@
 
       <section class="card">
         <div class="card-head">给 agent 用</div>
-        <p class="hint">同一套规则能力通过本地桥暴露成 MCP 工具，任何支持 MCP 的 agent 都能直接读写规则、读页面、点选元素。</p>
-        <pre class="snippet" id="mcpSnippet"></pre>
-        <button class="ghost small" id="copyMcpBtn">复制 MCP 配置</button>
+        <p class="hint">同一套规则能力通过本地桥暴露，MCP / Skill / CLI 三种接法任选。</p>
+        <div class="agent-tabs" id="agentTabs">
+          <button class="agent-tab active" data-agent="mcp">MCP</button>
+          <button class="agent-tab" data-agent="skill">Skill</button>
+          <button class="agent-tab" data-agent="cli">CLI / HTTP</button>
+        </div>
+        <pre class="snippet" id="agentSnippet"></pre>
+        <button class="ghost small" id="copyAgentBtn">复制 MCP 配置</button>
       </section>
     </aside>
   </div>

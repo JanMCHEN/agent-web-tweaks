@@ -53,10 +53,29 @@ function renderBridge(info) {
 
 function renderRules() {
   const list = $("ruleList");
-  const rules = (state.rules || []).filter((r) => r.matched !== false);
+  const canTweak = state.injectable !== false;
+  const pickBtn = $("pickBtn");
+  pickBtn.disabled = !canTweak;
+  pickBtn.title = canTweak ? "在页面上点选要定制的元素" : "先切到一个普通网页";
+
+  const rules = canTweak ? (state.rules || []).filter((r) => r.matched !== false) : [];
   const applied = new Set((state.status && state.status.applied) || []);
   $("ruleCount").textContent = String(rules.length);
   list.innerHTML = "";
+
+  if (!canTweak) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    const title = document.createElement("div");
+    title.textContent = "此页不能定制规则";
+    const hint = document.createElement("div");
+    hint.className = "empty-hint";
+    hint.textContent = "chrome:// 和扩展页面都改不了。切到要修改的网页，再点扩展图标";
+    empty.append(title, hint);
+    list.appendChild(empty);
+    return;
+  }
+
   if (!rules.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
@@ -147,15 +166,17 @@ function renderPick() {
 
 function renderPage() {
   const tab = state.tab;
+  const canTweak = state.injectable !== false;
   $("tabTitle").textContent = (tab && tab.title) || "当前标签页";
   $("tabUrl").textContent = shortUrl(tab && tab.url);
   $("tabUrl").title = (tab && tab.url) || "";
   const meta = [];
+  if (!canTweak) meta.push("此页不能定制（chrome:// 页面）");
   if (state.userScripts === false) meta.push("JS 未启用（点此开启）");
-  else if (state.mainWorld) meta.push("MAIN world 已启用");
+  else if (canTweak && state.mainWorld) meta.push("MAIN world 已启用");
   if (state.status && state.status.errors && state.status.errors.length) meta.push("有 " + state.status.errors.length + " 条执行错误");
   $("pageMeta").textContent = meta.join(" · ");
-  $("pageMeta").style.color = state.userScripts === false ? "#b45309" : "";
+  $("pageMeta").style.color = (!canTweak || state.userScripts === false) ? "#b45309" : "";
   $("pageMeta").style.cursor = state.userScripts === false ? "pointer" : "default";
   $("pageMeta").onclick = state.userScripts === false
     ? () => chrome.tabs.create({ url: "chrome://extensions/?id=" + (state.extensionId || chrome.runtime.id) })
@@ -163,7 +184,7 @@ function renderPage() {
 }
 
 async function load() {
-  state = await send("awt:state");
+  state = await send("awt:state", { page: "active" });
   renderBridge(state.bridge);
   renderPage();
   renderRules();

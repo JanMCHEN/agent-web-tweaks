@@ -236,6 +236,8 @@ function renderRuleItem(rule) {
 
   const mini = document.createElement("label");
   mini.className = "mini-switch";
+  // 开关自己处理点击：不然冒泡到整行会触发 selectRule → 重渲染，label 的切换动作被打断
+  mini.addEventListener("click", (event) => event.stopPropagation());
   mini.title = rule.enabled ? "停用" : "启用";
   const toggle = document.createElement("input");
   toggle.type = "checkbox";
@@ -700,23 +702,6 @@ async function duplicateCurrent() {
   }
 }
 
-async function renameCurrent() {
-  if (!draft) return;
-  const next = prompt("新的规则 id（字母/数字/._-）", draft.id);
-  if (!next || next === draft.id) return;
-  if (!isValidId(next)) {
-    toast("id 不合法", true);
-    return;
-  }
-  const oldId = draft.id;
-  draft.id = next;
-  const ok = await save({ silent: true });
-  if (ok) {
-    await send("awt:delete-rule", { id: oldId }).catch(() => {});
-    toast("已改 id");
-    await load();
-  }
-}
 
 async function exportRules() {
   const out = await send("awt:export");
@@ -861,7 +846,15 @@ $("saveBtn").addEventListener("click", async () => {
   const tabs = (result.applied || []).filter((item) => Array.isArray(item.applied) && item.applied.length).length;
   toast(tabs ? "已保存并应用到 " + tabs + " 个页面" : "已保存（当前没有命中的页面）");
 });
-$("renameBtn").addEventListener("click", renameCurrent);
+$("idText").addEventListener("click", async () => {
+  if (!draft) return;
+  try {
+    await navigator.clipboard.writeText(draft.id);
+    toast("已复制规则 id：" + draft.id);
+  } catch {
+    toast("复制失败，请手动选中", true);
+  }
+});
 $("reloadBtn").addEventListener("click", refreshStatus);
 $("pickBtn").addEventListener("click", async () => {
   try {
@@ -890,9 +883,17 @@ $("pickUseBtn").addEventListener("click", () => {
   scheduleSave();
   updateGutter();
 });
-$("copyMcpBtn").addEventListener("click", async () => {
-  await navigator.clipboard.writeText(mcpConfigText());
-  toast("MCP 配置已复制");
+$("copyAgentBtn").addEventListener("click", async () => {
+  const item = AGENT_SNIPPETS[agentTab] || AGENT_SNIPPETS.mcp;
+  await navigator.clipboard.writeText(item.text);
+  toast(item.label.replace(/^复制/, "已复制"));
+});
+
+$("agentTabs").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-agent]");
+  if (!btn) return;
+  agentTab = btn.dataset.agent;
+  renderAgentSnippet();
 });
 $("moreBtn").addEventListener("click", () => {
   openModal("更多操作", `
@@ -962,19 +963,55 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
-function mcpConfigText() {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        "web-tweaks": {
-          command: "node",
-          args: ["<仓库路径>/bridge/mcp.mjs"],
+const AGENT_SNIPPETS = {
+  mcp: {
+    label: "复制 MCP 配置",
+    text: JSON.stringify(
+      {
+        mcpServers: {
+          "web-tweaks": {
+            command: "node",
+            args: ["<仓库路径>/bridge/mcp.mjs"],
+          },
         },
       },
-    },
-    null,
-    2
-  );
+      null,
+      2
+    ),
+  },
+  skill: {
+    label: "复制安装命令",
+    text: [
+      "# 装到 ~/.codex/skills 和 ~/.claude/skills",
+      "node skill/install.mjs",
+      "",
+      "# 之后 agent 直接用 awt",
+      "node ~/.codex/skills/web-tweaks/scripts/awt.mjs status",
+      "node ~/.codex/skills/web-tweaks/scripts/awt.mjs pick",
+    ].join("\n"),
+  },
+  cli: {
+    label: "复制 CLI 示例",
+    text: [
+      "# 起本地桥（扩展会自动连上来）",
+      "node bridge/bridge.mjs",
+      "",
+      "# 任何能跑命令的 agent 都能调",
+      'curl -s http://127.0.0.1:8787/call \\',
+      '  -H "content-type: application/json" \\',
+      `  -d '{"tool":"rules.list","args":{}}'`,
+    ].join("\n"),
+  },
+};
+let agentTab = "mcp";
+
+function renderAgentSnippet() {
+  const item = AGENT_SNIPPETS[agentTab] || AGENT_SNIPPETS.mcp;
+  $("agentSnippet").textContent = item.text;
+  $("copyAgentBtn").textContent = item.label;
+  document.querySelectorAll(".agent-tab").forEach((el) => {
+    el.classList.toggle("active", el.dataset.agent === agentTab);
+  });
 }
 
 // ---------- 启动 ----------
@@ -1013,7 +1050,7 @@ function pickInitial() {
 }
 
 async function init() {
-  $("mcpSnippet").textContent = mcpConfigText();
+  renderAgentSnippet();
   await load();
   const id = pickInitial();
   if (id) await selectRule(id);
