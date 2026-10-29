@@ -17,7 +17,7 @@
 2. `page.html { selector }` 或 `page.pick` —— 找到要改的元素；
    如果用户已经在弹窗/工作台里点过元素，`page.context` 的 `last_pick` 或 `page.lastPick` 里就有现成的选择器
 3. `rules.save { rule, apply: true }` —— 写规则并立即应用
-4. `page.screenshot` —— 确认效果
+4. 自验证：`page.reload` → `page.click` / `page.type` → `page.waitFor` → `page.screenshot`
 5. 需要微调就再 `rules.save`（同一个 id 就是更新）
 
 ## 规则格式

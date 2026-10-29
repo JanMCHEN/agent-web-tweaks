@@ -36,7 +36,7 @@ node scripts/awt.mjs status
 node scripts/awt.mjs call rules.save '{"rule":{"id":"hide-promo","name":"去掉推广位","match":["https://example.com/*"],"css":".promo{display:none!important}"},"apply":true}'
 ```
 
-4. `node scripts/awt.mjs screenshot --out /tmp/awt.png` 看效果
+4. 自验证：`awt call page.reload` → `awt call page.click '{"selector":".toc-toggle"}'` → `awt call page.waitFor '{"selector":".toc.open"}'` → `awt screenshot --out /tmp/awt.png`
 5. 不满意就沿用同一个 `id` 再 save（= 更新）；只想临时撤掉用 `call page.remove`，真要删用 `call rules.delete '{"id":"..."}'`
 
 ## 写规则的要点

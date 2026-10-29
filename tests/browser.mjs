@@ -103,7 +103,7 @@ async function main() {
   const status = await call("meta.status", {});
   if (!status.ok) console.log("  meta.status 错误:", status.error);
   ok("meta.status 可用", status.ok);
-  check("工具清单可读", (await call("meta.tools")).result.tools.length, 18);
+  check("工具清单可读", (await call("meta.tools")).result.tools.length, 25);
 
   const rule = {
     id: "test-hide-title",

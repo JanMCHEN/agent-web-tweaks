@@ -519,6 +519,196 @@ async function pageText({ tabId, selector = "", maxChars = 20000 } = {}) {
   return { tabId: tab.id, url: tab.url, ...(out.value || { found: false }) };
 }
 
+// ---------- 页面交互（给 agent 自验证用） ----------
+async function waitTabComplete(tabId, timeoutMs = 15000) {
+  const started = Date.now();
+  let tab = null;
+  while (Date.now() - started < timeoutMs) {
+    tab = await chrome.tabs.get(Number(tabId)).catch(() => null);
+    if (tab && tab.status === "complete") return tab;
+    await new Promise((r) => setTimeout(r, 120));
+  }
+  return tab || (await chrome.tabs.get(Number(tabId)).catch(() => null));
+}
+
+// 动作之后回一份小状态：url/标题/已应用规则/报错，agent 一步就能判断有没有生效
+async function pageSnapshot(tabId) {
+  const tab = await chrome.tabs.get(Number(tabId)).catch(() => null);
+  const state = await pageState(tabId).catch(() => null);
+  return {
+    url: (tab && tab.url) || "",
+    title: (tab && tab.title) || "",
+    applied: (state && state.applied) || [],
+    errors: (state && state.errors) || [],
+  };
+}
+
+async function pageNavigate({ tabId, url, newTab = false } = {}) {
+  const target = String(url || "").trim();
+  if (!/^https?:\/\//i.test(target)) throw new Error("navigate 只支持 http/https URL");
+  if (newTab) {
+    const tab = await chrome.tabs.create({ url: target, active: true });
+    await waitTabComplete(tab.id);
+    return { tabId: tab.id, action: "navigate", ...(await pageSnapshot(tab.id)) };
+  }
+  const tab = await findPickTab(tabId);
+  if (!tab) throw new Error("当前窗口没有可用的标签页");
+  await chrome.tabs.update(tab.id, { url: target });
+  await waitTabComplete(tab.id);
+  return { tabId: tab.id, action: "navigate", ...(await pageSnapshot(tab.id)) };
+}
+
+async function pageReload({ tabId, bypassCache = false } = {}) {
+  const tab = await findPickTab(tabId);
+  if (!tab) throw new Error("当前窗口没有可用的标签页");
+  await chrome.tabs.reload(tab.id, { bypassCache: !!bypassCache });
+  await waitTabComplete(tab.id);
+  return { tabId: tab.id, action: "reload", ...(await pageSnapshot(tab.id)) };
+}
+
+async function pageClick({ tabId, selector, text, index = 0, settleMs = 300 } = {}) {
+  const tab = await findPickTab(tabId);
+  if (!tab) throw new Error("当前窗口没有可用的标签页");
+  if (!selector && !text) throw new Error("click 需要 selector 或 text");
+  const code = `return (() => {
+  const sel = ${JSON.stringify(String(selector || ""))};
+  const needle = ${JSON.stringify(String(text || ""))};
+  const idx = ${Number(index) || 0};
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none" && Number(cs.opacity) > 0;
+  };
+  let pool = sel ? Array.from(document.querySelectorAll(sel)) : [];
+  if (!sel && needle) {
+    pool = Array.from(document.querySelectorAll("a,button,[role=button],input[type=submit],label,li,span,div"))
+      .filter((el) => (el.innerText || el.textContent || "").trim().includes(needle));
+  }
+  const targets = pool.filter(visible);
+  const el = targets[idx];
+  if (!el) return { ok: false, reason: "not_found", candidates: targets.length };
+  el.scrollIntoView({ block: "center", inline: "center" });
+  const opts = { bubbles: true, cancelable: true, view: window, button: 0 };
+  try { el.dispatchEvent(new PointerEvent("pointerdown", opts)); } catch (e) {}
+  el.dispatchEvent(new MouseEvent("mousedown", opts));
+  try { el.dispatchEvent(new PointerEvent("pointerup", opts)); } catch (e) {}
+  el.dispatchEvent(new MouseEvent("mouseup", opts));
+  el.click();
+  return { ok: true, tag: el.tagName.toLowerCase(), text: String(el.innerText || el.textContent || "").trim().slice(0, 80), candidates: targets.length };
+})();`;
+  const out = await executePageCode(tab.id, code, "ISOLATED");
+  await new Promise((r) => setTimeout(r, Math.max(0, Number(settleMs) || 0)));
+  return { tabId: tab.id, action: "click", ...(out.value || {}), ...(await pageSnapshot(tab.id)) };
+}
+
+async function pageType({ tabId, selector, text = "", submit = false, clear = true, settleMs = 200 } = {}) {
+  const tab = await findPickTab(tabId);
+  if (!tab) throw new Error("当前窗口没有可用的标签页");
+  if (!selector) throw new Error("type 需要 selector");
+  const code = `return (() => {
+  const el = document.querySelector(${JSON.stringify(String(selector))});
+  if (!el) return { ok: false, reason: "not_found" };
+  el.scrollIntoView({ block: "center" });
+  el.focus();
+  const value = ${JSON.stringify(String(text))};
+  if (el.isContentEditable) {
+    if (${clear ? "true" : "false"}) el.textContent = "";
+    el.textContent = el.textContent + value;
+    el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+  } else {
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value") && Object.getOwnPropertyDescriptor(proto, "value").set;
+    const next = ${clear ? "value" : "String(el.value || \"\") + value"};
+    if (setter) setter.call(el, next); else el.value = next;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  let submitted = false;
+  if (${submit ? "true" : "false"}) {
+    const opts = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    el.dispatchEvent(new KeyboardEvent("keydown", opts));
+    el.dispatchEvent(new KeyboardEvent("keypress", opts));
+    el.dispatchEvent(new KeyboardEvent("keyup", opts));
+    const form = el.closest && el.closest("form");
+    if (form && form.requestSubmit) { try { form.requestSubmit(); submitted = true; } catch (e) {} }
+  }
+  return { ok: true, tag: el.tagName.toLowerCase(), value: String(el.value != null ? el.value : el.textContent).slice(0, 120), submitted };
+})();`;
+  const out = await executePageCode(tab.id, code, "ISOLATED");
+  await new Promise((r) => setTimeout(r, Math.max(0, Number(settleMs) || 0)));
+  return { tabId: tab.id, action: "type", ...(out.value || {}), ...(await pageSnapshot(tab.id)) };
+}
+
+async function pagePress({ tabId, key, selector, settleMs = 200 } = {}) {
+  const tab = await findPickTab(tabId);
+  if (!tab) throw new Error("当前窗口没有可用的标签页");
+  const name = String(key || "").trim();
+  if (!name) throw new Error("press 需要 key（如 Enter / Escape / Tab）");
+  const code = `return (() => {
+  const el = ${selector ? `document.querySelector(${JSON.stringify(String(selector))}) || document.activeElement` : "document.activeElement || document.body"};
+  if (!el) return { ok: false, reason: "no_target" };
+  const key = ${JSON.stringify(name)};
+  const opts = { key, code: key, bubbles: true, cancelable: true };
+  el.dispatchEvent(new KeyboardEvent("keydown", opts));
+  el.dispatchEvent(new KeyboardEvent("keypress", opts));
+  el.dispatchEvent(new KeyboardEvent("keyup", opts));
+  return { ok: true, target: el.tagName.toLowerCase() };
+})();`;
+  const out = await executePageCode(tab.id, code, "ISOLATED");
+  await new Promise((r) => setTimeout(r, Math.max(0, Number(settleMs) || 0)));
+  return { tabId: tab.id, action: "press", key: name, ...(out.value || {}), ...(await pageSnapshot(tab.id)) };
+}
+
+async function pageScroll({ tabId, selector, direction = "down", amount = 600, settleMs = 200 } = {}) {
+  const tab = await findPickTab(tabId);
+  if (!tab) throw new Error("当前窗口没有可用的标签页");
+  const code = `return (() => {
+  const sel = ${JSON.stringify(String(selector || ""))};
+  if (sel) {
+    const el = document.querySelector(sel);
+    if (!el) return { ok: false, reason: "not_found" };
+    el.scrollIntoView({ block: "center", behavior: "auto" });
+    return { ok: true, mode: "element", y: Math.round(window.scrollY) };
+  }
+  const dir = ${JSON.stringify(String(direction || "down"))};
+  const amount = ${Number(amount) || 600};
+  if (dir === "top") window.scrollTo({ top: 0, behavior: "auto" });
+  else if (dir === "bottom") window.scrollTo({ top: document.body.scrollHeight, behavior: "auto" });
+  else window.scrollBy({ top: dir === "up" ? -amount : amount, behavior: "auto" });
+  return { ok: true, mode: dir, y: Math.round(window.scrollY), height: document.body.scrollHeight };
+})();`;
+  const out = await executePageCode(tab.id, code, "ISOLATED");
+  await new Promise((r) => setTimeout(r, Math.max(0, Number(settleMs) || 0)));
+  return { tabId: tab.id, action: "scroll", ...(out.value || {}), ...(await pageSnapshot(tab.id)) };
+}
+
+async function pageWaitFor({ tabId, selector, text, timeoutMs = 5000, intervalMs = 120, visible = true } = {}) {
+  const tab = await findPickTab(tabId);
+  if (!tab) throw new Error("当前窗口没有可用的标签页");
+  if (!selector && !text) throw new Error("waitFor 需要 selector 或 text");
+  const code = `const started = Date.now();
+const timeout = ${Math.max(200, Number(timeoutMs) || 5000)};
+const interval = ${Math.max(50, Number(intervalMs) || 120)};
+const sel = ${JSON.stringify(String(selector || ""))};
+const needle = ${JSON.stringify(String(text || ""))};
+const needVisible = ${visible === false ? "false" : "true"};
+const shown = (el) => {
+  if (!el) return false;
+  if (!needVisible) return true;
+  const r = el.getBoundingClientRect();
+  const cs = getComputedStyle(el);
+  return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none" && Number(cs.opacity) > 0;
+};
+while (Date.now() - started < timeout) {
+  if (sel && shown(document.querySelector(sel))) return { ok: true, found: true, waitedMs: Date.now() - started, selector: sel };
+  if (!sel && needle && document.body && (document.body.innerText || "").includes(needle)) return { ok: true, found: true, waitedMs: Date.now() - started, text: needle };
+  await new Promise((r) => setTimeout(r, interval));
+}
+return { ok: true, found: false, waitedMs: Date.now() - started, selector: sel || null, text: needle || null };`;
+  const out = await executePageCode(tab.id, code, "ISOLATED");
+  return { tabId: tab.id, action: "waitFor", ...(out.value || {}), ...(await pageSnapshot(tab.id)) };
+}
+
 // ---------- 给 agent 的工具 ----------
 async function toolMetaStatus() {
   const rules = await getRules();
@@ -612,6 +802,20 @@ async function runTool(name, args = {}) {
       return await evalInPage(args);
     case "page.screenshot":
       return await screenshot(args);
+    case "page.navigate":
+      return await pageNavigate(args);
+    case "page.reload":
+      return await pageReload(args);
+    case "page.click":
+      return await pageClick(args);
+    case "page.type":
+      return await pageType(args);
+    case "page.press":
+      return await pagePress(args);
+    case "page.scroll":
+      return await pageScroll(args);
+    case "page.waitFor":
+      return await pageWaitFor(args);
     case "page.pick": {
       const started = await injectPicker(args.tabId);
       const reference = await waitForPick(args.timeoutMs || 120000);

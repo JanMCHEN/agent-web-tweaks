@@ -33,6 +33,13 @@
 | `page.screenshot` | `tabId?` | `{ dataUrl }`（PNG） |
 | `page.lastPick` | `tabId?` | 读用户最后一次拾取（不重新发起）；`same_page` 表示是不是当前页 |
 | `page.pick` | `tabId?`, `timeoutMs?` | 等用户点选，返回 selector/tag/classes/text/attributes/rect/html |
+| `page.navigate` | `url`, `newTab?`, `tabId?` | 打开页面并等加载完成 |
+| `page.reload` | `tabId?`, `bypassCache?` | 刷新并等加载完成 |
+| `page.click` | `selector?` / `text?`, `index?` | 派发完整鼠标事件；返回点击后的 url/标题/已应用规则 |
+| `page.type` | `selector`, `text`, `submit?`, `clear?` | 写入输入框（兼容 React 受控组件） |
+| `page.press` | `key`, `selector?` | 发按键（Enter / Escape / Tab…） |
+| `page.scroll` | `selector?` / `direction?` + `amount?` | 滚到元素或按方向滚动 |
+| `page.waitFor` | `selector?` / `text?`, `timeoutMs?`, `visible?` | 等元素/文字出现（默认等可见），超时返回 `found:false` |
 | `page.apply` | `tabId?`, `id?` | 不填 id = 应用所有匹配规则 |
 | `page.remove` | `tabId?`, `id?` | 只撤当前标签页，规则本身还在 |
 
@@ -56,6 +63,12 @@ node scripts/awt.mjs call page.eval '{"code":"return window.__NEXT_DATA__ ? Obje
 
 # 截图
 node scripts/awt.mjs screenshot --out /tmp/page.png
+
+# 自验证闭环：保存 → 刷新 → 交互 → 等结果 → 截图
+node scripts/awt.mjs call page.reload
+node scripts/awt.mjs call page.click '{"selector":".toc-toggle"}'
+node scripts/awt.mjs call page.waitFor '{"selector":".toc.open","timeoutMs":3000}'
+node scripts/awt.mjs screenshot --out /tmp/verified.png
 
 # 列出规则，并标出当前页命中的
 node scripts/awt.mjs call rules.list '{"url":"https://example.com/docs"}'

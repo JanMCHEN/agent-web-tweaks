@@ -85,6 +85,79 @@ export const TOOL_DEFS = [
     },
   },
   {
+    name: "page.navigate",
+    description: "打开或跳转到一个 http/https 页面，等加载完成后返回 url/标题/已应用规则。写规则做自验证时用它打开目标页。",
+    inputSchema: {
+      type: "object",
+      properties: { url: { type: "string" }, newTab: { type: "boolean" }, tabId: { type: "number" } },
+      required: ["url"],
+    },
+  },
+  {
+    name: "page.reload",
+    description: "刷新标签页并等加载完成，返回刷新后的页面状态（用来验证 document_start 注入的规则）。",
+    inputSchema: { type: "object", properties: { tabId: { type: "number" }, bypassCache: { type: "boolean" } } },
+  },
+  {
+    name: "page.click",
+    description: "按选择器或可见文字点击元素（派发完整鼠标事件序列），等一小会儿后返回 url/标题/已应用规则，方便验证点击后规则是否生效。",
+    inputSchema: {
+      type: "object",
+      properties: { selector: { type: "string" }, text: { type: "string" }, index: { type: "number" }, tabId: { type: "number" } },
+    },
+  },
+  {
+    name: "page.type",
+    description: "聚焦输入框并写入文本（兼容 React 受控组件），可选回车提交。返回输入后的值。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string" },
+        text: { type: "string" },
+        submit: { type: "boolean" },
+        clear: { type: "boolean" },
+        tabId: { type: "number" },
+      },
+      required: ["selector", "text"],
+    },
+  },
+  {
+    name: "page.press",
+    description: "向当前焦点元素（或指定元素）发送按键，如 Enter / Escape / Tab。",
+    inputSchema: {
+      type: "object",
+      properties: { key: { type: "string" }, selector: { type: "string" }, tabId: { type: "number" } },
+      required: ["key"],
+    },
+  },
+  {
+    name: "page.scroll",
+    description: "滚动页面：给 selector 滚到元素，或 direction=up/down/top/bottom 滚动指定距离。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string" },
+        direction: { type: "string", enum: ["up", "down", "top", "bottom"] },
+        amount: { type: "number" },
+        tabId: { type: "number" },
+      },
+    },
+  },
+  {
+    name: "page.waitFor",
+    description: "等某个选择器或某段文字出现，返回 found 与 waitedMs；默认等元素可见，visible=false 只等它进 DOM；超时返回 found=false 而不是报错。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string" },
+        text: { type: "string" },
+        timeoutMs: { type: "number" },
+        visible: { type: "boolean" },
+        tabId: { type: "number" },
+      },
+    },
+  },
+  {
     name: "page.screenshot",
     description: "截当前可见区域，返回 data URL。",
     inputSchema: { type: "object", properties: { tabId: { type: "number" } } },

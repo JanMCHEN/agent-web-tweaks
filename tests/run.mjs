@@ -40,7 +40,7 @@ ok("中文名有唯一 id", normalizeRule({ name: "中文" }).id.startsWith("rul
 ok("规则脚本可编译", (() => { new Function(buildRuleScript({ id: "m", match: ["*://*/*"], js: "tweak.log(1)", enabled: true }, {}, "USER_SCRIPT")); return true; })());
 ok("MAIN 脚本可编译", (() => { new Function(buildRuleScript({ id: "m2", match: ["*://*/*"], js: "await tweak.waitFor('.x');" }, {}, "MAIN")); return true; })());
 ok("脚本带世界标记", buildRuleScript({ id: "m3", match: [], js: "" }, {}, "MAIN").includes('const WORLD = "MAIN"'));
-check("工具数量", TOOL_DEFS.length, 18);
+check("工具数量", TOOL_DEFS.length, 25);
 
 // ---------- 本地桥 ----------
 const PORT = 8799;
