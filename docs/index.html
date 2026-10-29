@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent Web Tweaks · 给任意网页打补丁</title>
+<meta name="description" content="一条规则 = URL + CSS/JS。保存即生效，关掉浏览器也还在；同一套能力通过 MCP / Skill 交给任何 agent。" />
+<style>
+  :root { --ink:#f8fafc; --muted:#94a3b8; --line:rgba(255,255,255,.1); --accent:#818cf8; --cyan:#22d3ee; }
+  * { box-sizing: border-box; margin: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    color: var(--ink); background: #05070f;
+    font: 15px/1.7 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  .wrap { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
+  header {
+    position: sticky; top: 0; z-index: 30;
+    background: rgba(5,7,15,.72); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav { display: flex; align-items: center; gap: 14px; height: 62px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.01em; }
+  .brand .mark { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg,#6366f1,#22d3ee); font-size: 12px; }
+  .nav .spacer { flex: 1; }
+  .nav a.link { color: var(--muted); font-size: 14px; padding: 6px 10px; border-radius: 8px; }
+  .nav a.link:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
+    background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff;
+    box-shadow: 0 10px 30px rgba(79,70,229,.35);
+  }
+  .btn.ghost { background: rgba(255,255,255,.06); color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+
+  .hero { padding: 74px 0 40px; position: relative; overflow: hidden; }
+  .hero::before {
+    content: ""; position: absolute; inset: -20% -10% auto; height: 620px; pointer-events: none;
+    background: radial-gradient(560px 360px at 20% 0%, rgba(99,102,241,.4), transparent 62%),
+                radial-gradient(520px 340px at 85% 10%, rgba(34,211,238,.18), transparent 60%);
+  }
+  .hero .wrap { position: relative; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 13px; border-radius: 999px; font-size: 12.5px; color: #c7d2fe; background: rgba(99,102,241,.12); border: 1px solid rgba(129,140,248,.35); }
+  .pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+  h1 { font-size: clamp(38px, 6vw, 64px); line-height: 1.08; letter-spacing: -.035em; margin: 18px 0 0; font-weight: 800; }
+  h1 .grad { background: linear-gradient(96deg,#fff,#a5b4fc 45%,#67e8f9); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { color: #a8b3c7; font-size: 17px; margin-top: 16px; max-width: 620px; }
+  .lead b { color: #e2e8f0; }
+  .hero-actions { display: flex; gap: 10px; margin-top: 24px; flex-wrap: wrap; }
+  .hero-note { color: #64748b; font-size: 12.5px; margin-top: 14px; }
+
+  .slider {
+    position: relative; margin-top: 40px; border-radius: 16px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.12); box-shadow: 0 50px 120px -40px rgba(0,0,0,.95);
+    aspect-ratio: 16 / 10; background: #0b1020; --pos: 45%;
+  }
+  .slider img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  .slider .after { clip-path: inset(0 0 0 var(--pos)); }
+  .slider .divider {
+    position: absolute; top: 0; bottom: 0; left: var(--pos); width: 2px; margin-left: -1px;
+    background: linear-gradient(#22d3ee,#6366f1); box-shadow: 0 0 24px 6px rgba(99,102,241,.55);
+  }
+  .slider .knob {
+    position: absolute; top: 50%; left: var(--pos); transform: translate(-50%,-50%);
+    width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+    background: linear-gradient(135deg,#a5b4fc,#67e8f9); color: #0b1020; font-weight: 700;
+    box-shadow: 0 12px 30px rgba(99,102,241,.55);
+  }
+  .slider input[type=range] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; margin: 0; }
+  .slider .tag { position: absolute; bottom: 16px; padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .14em; backdrop-filter: blur(8px); z-index: 2; }
+  .slider .tag.b { left: 16px; color: #cbd5e1; background: rgba(10,12,20,.72); border: 1px solid rgba(255,255,255,.16); }
+  .slider .tag.a { right: 16px; color: #0b1020; background: linear-gradient(90deg,#a5b4fc,#67e8f9); }
+
+  section { padding: 56px 0; }
+  .kicker { color: var(--cyan); font-size: 12.5px; letter-spacing: .16em; font-weight: 700; }
+  h2 { font-size: clamp(26px, 3.2vw, 36px); letter-spacing: -.02em; margin: 8px 0 10px; }
+  .sub { color: var(--muted); max-width: 720px; }
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; margin-top: 26px; }
+  .card { padding: 20px; border-radius: 14px; background: rgba(255,255,255,.035); border: 1px solid var(--line); }
+  .card .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: rgba(99,102,241,.16); font-size: 17px; }
+  .card h3 { font-size: 15.5px; margin: 12px 0 6px; }
+  .card p { color: var(--muted); font-size: 13.5px; }
+
+  .shot { margin-top: 22px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px -40px rgba(0,0,0,.9); }
+  .shot img { display: block; width: 100%; }
+  .two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; align-items: center; }
+  .two img { width: 100%; border-radius: 14px; border: 1px solid var(--line); }
+
+  pre {
+    background: #0b1020; border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; overflow-x: auto; font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #cbd5e1;
+  }
+  pre .c { color: #64748b; }
+  pre .k { color: #a5b4fc; }
+  code.inline { background: rgba(255,255,255,.07); padding: 2px 6px; border-radius: 5px; font-size: 13px; }
+
+  ol.steps { margin: 18px 0 0; padding-left: 20px; color: #cbd5e1; }
+  ol.steps li { margin: 8px 0; }
+
+  footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: #64748b; font-size: 13px; display: flex; gap: 14px; flex-wrap: wrap; }
+  @media (max-width: 900px) { .cards { grid-template-columns: 1fr; } .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <div class="brand"><span class="mark">◆</span> Agent Web Tweaks</div>
+    <span class="spacer"></span>
+    <a class="link" href="#how">怎么用</a>
+    <a class="link" href="#agent">给 agent</a>
+    <a class="link" href="#dev">开发</a>
+    <a class="btn" href="#install">安装</a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="pill"><i></i> Chrome MV3 · MCP · Skill · 零依赖</span>
+    <h1>给任意网页<br><span class="grad">打补丁</span></h1>
+    <p class="lead">一条规则 = <b>URL + CSS/JS</b>。保存即生效，关掉浏览器也还在；<br>同一套能力通过 <b>MCP / Skill / CLI</b> 交给任何 agent。</p>
+    <div class="hero-actions">
+      <a class="btn" href="#install">30 秒上手</a>
+      <a class="btn ghost" href="#agent">看看 agent 怎么用</a>
+    </div>
+    <div class="hero-note">本地运行 · 不上传任何数据 · MIT 开源</div>
+
+    <div class="slider" id="slider" style="--pos:45%">
+      <img src="images/before.png" alt="原页面" />
+      <img class="after" src="images/after.png" alt="定制后" />
+      <span class="tag b">BEFORE</span>
+      <span class="tag a">AFTER</span>
+      <div class="divider"></div>
+      <div class="knob">↔</div>
+      <input type="range" min="0" max="100" value="45" aria-label="拖动对比" />
+    </div>
+  </div>
+</div>
+
+<section id="why">
+  <div class="wrap">
+    <div class="kicker">WHY</div>
+    <h2>不是又一个「装脚本」的扩展</h2>
+    <p class="sub">Stylus 只会改 CSS，Tampermonkey 要写元数据、手动维护脚本；而 agent 想改网页时，缺的是一条能留下结果的通道。</p>
+    <div class="cards">
+      <div class="card"><div class="ico">✂️</div><h3>拾取即规则</h3><p>在页面上点一下元素，自动拿到稳定选择器，一键生成「隐藏 / 删除 / 改文案」规则，不用记 CSS 类名。</p></div>
+      <div class="card"><div class="ico">⚡</div><h3>保存即生效</h3><p>规则注册成 <code class="inline">document_start</code> 的 userScript，刷新、SPA 路由切换、重开浏览器都自动生效，首屏不闪。</p></div>
+      <div class="card"><div class="ico">🤖</div><h3>规则是数据</h3><p>规则存在本地、结构固定，MCP / Skill / CLI 都能读写；agent 读完页面就能直接写规则、应用、截图确认。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="kicker">HOW</div>
+    <h2>30 秒，把页面变成你想要的样子</h2>
+    <div class="two">
+      <div>
+        <ol class="steps">
+          <li><code class="inline">chrome://extensions</code> → 开发者模式 → 加载已解压的扩展程序</li>
+          <li>扩展详情里打开 <b>「允许用户脚本」</b>（只有 JS 规则需要）</li>
+          <li>点图标 →「拾取元素」→ 在页面上点一下广告/浮层</li>
+          <li>点「隐藏」——完成。规则会一直生效，也可以在弹窗里随时关掉</li>
+        </ol>
+      </div>
+      <pre><span class="c">// 也可以直接写规则</span>
+{
+  <span class="k">"id"</span>: "hide-promo",
+  <span class="k">"name"</span>: "去掉推广位",
+  <span class="k">"match"</span>: ["https://example.com/*"],
+  <span class="k">"css"</span>: ".promo-banner { display: none !important; }",
+  <span class="k">"js"</span>: ""
+}</pre>
+    </div>
+    <div class="shot"><img src="images/studio.png" alt="工作台" /></div>
+  </div>
+</section>
+
+<section id="agent">
+  <div class="wrap">
+    <div class="kicker">AGENTS</div>
+    <h2>同一套规则，任何 agent 都能用</h2>
+    <p class="sub">扩展通过本地桥暴露 18 个工具：读页面、拾取元素、执行 JS、截图、增删改规则。接 MCP、装成 skill、或者直接 curl。</p>
+    <div class="shot"><img src="images/agent.png" alt="agent 使用" /></div>
+    <pre style="margin-top:18px"><span class="c"># MCP</span>
+{ "mcpServers": { "web-tweaks": { "command": "node", "args": ["&lt;repo&gt;/bridge/mcp.mjs"] } } }
+
+<span class="c"># Skill</span>
+node skill/install.mjs
+node ~/.codex/skills/web-tweaks/scripts/awt.mjs status
+
+<span class="c"># CLI / curl</span>
+awt context
+awt call rules.save '{"rule":{"id":"hide-promo","match":["https://example.com/*"],"css":".promo{display:none}"},"apply":true}'</pre>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="kicker">INSTALL</div>
+    <h2>安装</h2>
+    <pre>git clone &lt;repo-url&gt; agent-web-tweaks
+<span class="c"># chrome://extensions → 开发者模式 → 加载已解压的扩展程序 → 选这个目录</span>
+<span class="c"># 可选：node bridge/bridge.mjs   # 给 agent 用的本地桥</span></pre>
+    <p class="sub" style="margin-top:14px">需要 Chrome 120+。规则只存在本机 <code class="inline">chrome.storage.local</code>，不会上传。</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap" style="display:flex;gap:16px;flex-wrap:wrap;width:100%">
+    <span>Agent Web Tweaks</span>
+    <span>·</span>
+    <span>MIT License</span>
+    <span>·</span>
+    <span>本地运行，不上传数据</span>
+  </div>
+</footer>
+
+<script>
+  const slider = document.getElementById("slider");
+  const input = slider.querySelector("input");
+  const set = (v) => slider.style.setProperty("--pos", v + "%");
+  input.addEventListener("input", () => set(input.value));
+  let dragging = false;
+  slider.addEventListener("pointerdown", (e) => {
+    if (e.target === input) return;
+    dragging = true;
+    move(e);
+  });
+  window.addEventListener("pointermove", (e) => { if (dragging) move(e); });
+  window.addEventListener("pointerup", () => { dragging = false; });
+  function move(e) {
+    const r = slider.getBoundingClientRect();
+    const v = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100));
+    input.value = v;
+    set(v);
+  }
+</script>
+</body>
+</html>

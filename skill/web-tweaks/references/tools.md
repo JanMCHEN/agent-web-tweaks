@@ -1,0 +1,73 @@
+# 工具
+
+全部通过 `awt call <tool> '<json args>'` 调用；`--no-auto-up` 可禁止自动起桥。
+
+## 状态
+
+| 工具 | 参数 | 返回 |
+| --- | --- | --- |
+| `meta.status` | – | 扩展版本、桥状态、`userScripts` 是否可用、规则数、标签页数 |
+| `meta.tools` | – | 完整工具清单（含 inputSchema） |
+| `tabs.list` | `allWindows?` | 标签页 id/url/title/active |
+
+## 规则
+
+| 工具 | 参数 | 说明 |
+| --- | --- | --- |
+| `rules.list` | `url?`, `full?` | 给 `url` 时每条带 `matched`；`full` 带源码 |
+| `rules.get` | `id` | 单条完整内容 |
+| `rules.save` | `rule`, `apply?`(默认 true) | 新建或更新（同 id = 更新），保存后应用到所有匹配标签页 |
+| `rules.delete` | `id` | 删除并撤掉已打开页面上的效果 |
+| `rules.toggle` | `id`, `enabled` | 启停 |
+| `rules.export` | – | `{ json }` |
+| `rules.import` | `data`, `mode?` | `merge` / `replace` |
+
+## 页面
+
+| 工具 | 参数 | 说明 |
+| --- | --- | --- |
+| `page.context` | `tabId?` | URL、标题、选中文字、heading 结构、已应用规则、报错，以及 `last_pick`（用户最后一次拾取的元素） |
+| `page.html` | `tabId?`, `selector?`, `maxChars?` | outerHTML |
+| `page.text` | `tabId?`, `selector?`, `maxChars?` | innerText |
+| `page.eval` | `tabId?`, `code`, `world?` | 按 async 函数体执行，`return` 的值会序列化回来；`world=MAIN` 可拿页面变量 |
+| `page.screenshot` | `tabId?` | `{ dataUrl }`（PNG） |
+| `page.lastPick` | `tabId?` | 读用户最后一次拾取（不重新发起）；`same_page` 表示是不是当前页 |
+| `page.pick` | `tabId?`, `timeoutMs?` | 等用户点选，返回 selector/tag/classes/text/attributes/rect/html |
+| `page.apply` | `tabId?`, `id?` | 不填 id = 应用所有匹配规则 |
+| `page.remove` | `tabId?`, `id?` | 只撤当前标签页，规则本身还在 |
+
+## 例子
+
+```bash
+# 看当前页
+node scripts/awt.mjs context
+
+# 用户在弹窗里点过元素了：直接拿结果，不用再让他点一次
+node scripts/awt.mjs call page.lastPick
+
+# 让用户点一个元素
+node scripts/awt.mjs pick
+
+# 读某个区块的 HTML
+node scripts/awt.mjs call page.html '{"selector":".article-body","maxChars":4000}'
+
+# 在页面里取一个值（MAIN world 才能看到页面自己的变量）
+node scripts/awt.mjs call page.eval '{"code":"return window.__NEXT_DATA__ ? Object.keys(window.__NEXT_DATA__) : null","world":"MAIN"}'
+
+# 截图
+node scripts/awt.mjs screenshot --out /tmp/page.png
+
+# 列出规则，并标出当前页命中的
+node scripts/awt.mjs call rules.list '{"url":"https://example.com/docs"}'
+
+# 撤销 + 删除
+node scripts/awt.mjs call page.remove '{"id":"hide-promo"}'
+node scripts/awt.mjs call rules.delete '{"id":"hide-promo"}'
+```
+
+## 注意
+
+- `tabId` 不传就是当前活动标签页；多标签页场景显式传更稳
+- `page.eval` 在 `USER_SCRIPT` 世界执行，拿不到页面自己的闭包变量；要页面全局就传 `world: "MAIN"`
+- `page.screenshot` 截的是可见区域，需要整页就滚动后再截
+- 工具失败会以非 0 退出码返回，错误里带原因（比如「扩展未连接」）

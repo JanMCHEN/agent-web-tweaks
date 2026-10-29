@@ -1,0 +1,87 @@
+/* Agent Web Tweaks 示例规则：把 Acme Cloud 控制台换成深色 + 去掉干扰 */
+.promo-banner,
+.ad-slot,
+.cookie-banner,
+.chat-widget,
+.upsell,
+.footer-promo { display: none !important; }
+
+body {
+  background:
+    radial-gradient(900px 520px at 12% -8%, rgba(99, 102, 241, .35), transparent 60%),
+    radial-gradient(800px 480px at 92% 0%, rgba(34, 211, 238, .18), transparent 55%),
+    #0b1020 fixed;
+  color: #e5e7eb;
+  letter-spacing: .01em;
+}
+
+.topbar {
+  background: rgba(11, 16, 32, .72);
+  backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+.brand { color: #f8fafc; }
+.brand .logo {
+  background: linear-gradient(135deg, #6366f1, #22d3ee);
+  box-shadow: 0 6px 18px rgba(79, 70, 229, .45);
+}
+.env { background: rgba(34, 211, 238, .12); color: #67e8f9; }
+.tabs a { color: #94a3b8; }
+.tabs a.active {
+  background: rgba(99, 102, 241, .18);
+  color: #c7d2fe;
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, .35);
+}
+.top-actions { color: #94a3b8; }
+.avatar { background: linear-gradient(135deg, #6366f1, #22d3ee); }
+
+.side {
+  background: rgba(255, 255, 255, .02);
+  border-right: 1px solid rgba(255, 255, 255, .06);
+}
+.side-title { color: #64748b; }
+.side li { color: #94a3b8; border-radius: 9px; }
+.side li .dot { background: #475569; }
+.side li.active {
+  background: linear-gradient(90deg, rgba(99, 102, 241, .25), rgba(34, 211, 238, .08));
+  color: #e0e7ff;
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, .3);
+}
+.side li.active .dot { background: #22d3ee; box-shadow: 0 0 10px #22d3ee; }
+
+main { padding: 26px 30px 64px; }
+h1 {
+  font-size: 27px;
+  letter-spacing: -.02em;
+  margin: 4px 0 18px;
+  background: linear-gradient(90deg, #ffffff, #a5b4fc 70%, #67e8f9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.stats { gap: 14px; }
+.stat, .card {
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 24px 60px -28px rgba(0, 0, 0, .9);
+}
+.stat .k { color: #94a3b8; }
+.stat .v { color: #f8fafc; font-size: 22px; }
+.stat .d { color: #34d399; }
+
+.card h2 { color: #e2e8f0; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+th { color: #64748b; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+td { color: #cbd5e1; border-bottom: 1px solid rgba(255, 255, 255, .05); }
+td:first-child { color: #e2e8f0; font-weight: 600; }
+.pill { background: rgba(16, 185, 129, .14); color: #34d399; }
+.pill.warn { background: rgba(245, 158, 11, .14); color: #fbbf24; }
+
+.chart .grid { stroke: rgba(255, 255, 255, .06); }
+.chart .line { stroke: url(#g2); stroke-width: 2.4; filter: drop-shadow(0 0 10px rgba(99, 102, 241, .55)); }
+.chart .area { fill: url(#g1); opacity: .9; }
+.alerts li { color: #cbd5e1; }
+.alerts .lvl { box-shadow: 0 0 10px currentColor; }
+.alerts .time { color: #64748b; }

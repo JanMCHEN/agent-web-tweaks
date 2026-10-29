@@ -1,0 +1,7 @@
+interface:
+  display_name: "Web Tweaks"
+  short_description: "用 CSS/JS 规则定制用户 Chrome 里的任意网页"
+  icon_small: "./assets/icon128.png"
+  icon_large: "./assets/icon128.png"
+  brand_color: "#4F46E5"
+  default_prompt: "Use $web-tweaks to hide the promo banner on the page I'm looking at."

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>Agent Web Tweaks</title>
+</head>
+<body>
+  <header>
+    <img class="logo" src="../../icons/icon48.png" alt="" />
+    <div class="head">
+      <div class="title">Agent Web Tweaks</div>
+      <div class="sub" id="bridgeSub">正在连接本地桥…</div>
+    </div>
+    <span class="dot" id="bridgeDot" title="本地桥连接状态"></span>
+  </header>
+
+  <nav class="toolbar">
+    <button class="link" id="studioBtn">打开工作台</button>
+    <span class="sep">·</span>
+    <button class="link" id="removeAllBtn">本页临时撤销</button>
+    <span class="sep">·</span>
+    <button class="link" id="refreshBtn">刷新</button>
+  </nav>
+
+  <main>
+    <section class="page-card">
+      <div class="page-title" id="tabTitle">当前标签页</div>
+      <div class="page-url" id="tabUrl">-</div>
+      <div class="page-meta" id="pageMeta"></div>
+    </section>
+
+    <section class="rules-card">
+      <div class="section-head">
+        <span>此页规则</span>
+        <span class="count" id="ruleCount">0</span>
+      </div>
+      <div id="ruleList" class="rule-list"></div>
+      <button class="btn ghost full" id="pickBtn">拾取元素</button>
+    </section>
+
+    <section class="pick-card" id="pickCard" hidden>
+      <div class="section-head"><span>刚拾取的元素</span><button class="link" id="pickClear">清除</button></div>
+      <div class="pick-selector" id="pickSelector"></div>
+      <div class="pick-text" id="pickText"></div>
+      <div class="chips">
+        <button class="chip" data-act="hide">隐藏</button>
+        <button class="chip" data-act="remove">删除</button>
+        <button class="chip" data-act="text">改文案</button>
+        <button class="chip" data-act="css">复制选择器</button>
+        <button class="chip" data-act="agent">复制给 agent</button>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" hidden></div>
+  </main>
+
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

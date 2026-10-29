@@ -1,0 +1,17 @@
+{
+  "name": "agent-web-tweaks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "按 URL 用 CSS/JS 定制网页，并把能力通过 MCP / HTTP 交给任何 agent。",
+  "scripts": {
+    "bridge": "node bridge/bridge.mjs",
+    "mcp": "node bridge/mcp.mjs",
+    "test": "node tests/run.mjs",
+    "test:browser": "node tests/browser.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^23.0.0"
+  },
+  "engines": { "node": ">=18" }
+}

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Acme Cloud · 概览</title>
+<style>
+  :root {
+    --bg: #eef1f6;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #dfe3ea;
+    --accent: #6b7280;
+    --side-bg: #ffffff;
+    --side-ink: #374151;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+  }
+  .topbar {
+    display: flex; align-items: center; gap: 22px;
+    padding: 10px 20px; background: #fff; border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+  .brand .logo { width: 22px; height: 22px; border-radius: 6px; background: #111827; color: #fff; display: grid; place-items: center; font-size: 12px; }
+  .env { font-size: 10px; color: #92400e; background: #fef3c7; border-radius: 4px; padding: 1px 5px; font-weight: 600; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs a { padding: 5px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 12.5px; }
+  .tabs a.active { background: #e5e7eb; color: #111827; font-weight: 600; }
+  .top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .avatar { width: 24px; height: 24px; border-radius: 50%; background: #c7d2fe; }
+
+  .promo-banner {
+    background: linear-gradient(90deg, #f59e0b, #ef4444); color: #fff;
+    padding: 7px 20px; font-size: 12px; font-weight: 600;
+  }
+  .wrap { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 0; min-height: calc(100vh - 96px); }
+  .side { background: var(--side-bg); border-right: 1px solid var(--line); padding: 12px 10px; color: var(--side-ink); }
+  .side-title { font-size: 11px; color: var(--muted); margin: 6px 8px 8px; letter-spacing: .04em; }
+  .side ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+  .side li { padding: 7px 8px; border-radius: 6px; color: var(--side-ink); font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
+  .side li.active { background: #eef2ff; color: #3730a3; font-weight: 600; }
+  .side li .dot { width: 6px; height: 6px; border-radius: 50%; background: #9ca3af; }
+  .upsell { margin: 14px 6px 0; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 8px; font-size: 11.5px; color: #475569; }
+
+  main { padding: 16px 18px 40px; }
+  h1 { font-size: 19px; margin: 2px 0 14px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+  .stat .k { color: var(--muted); font-size: 11.5px; }
+  .stat .v { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .stat .d { font-size: 11px; color: #059669; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-top: 12px; }
+  .card h2 { font-size: 13px; margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  td { padding: 8px 12px; border-bottom: 1px solid #f1f3f7; }
+  tr:last-child td { border-bottom: 0; }
+  .pill { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: #ecfdf5; color: #047857; }
+  .pill.warn { background: #fffbeb; color: #b45309; }
+
+  .ad-slot {
+    margin-top: 12px; padding: 18px; border-radius: 6px; text-align: center;
+    background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 10px, #eceef2 10px, #eceef2 20px);
+    color: #9ca3af; font-size: 12px; border: 1px dashed #d1d5db;
+  }
+  .cookie-banner {
+    position: fixed; left: 16px; bottom: 16px; max-width: 420px;
+    background: #111827; color: #f9fafb; border-radius: 10px; padding: 12px 14px;
+    font-size: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.28); z-index: 30;
+  }
+  .cookie-banner .row { display: flex; gap: 8px; margin-top: 8px; }
+  .cookie-banner button { border: 0; border-radius: 6px; padding: 5px 12px; font: inherit; font-size: 11.5px; cursor: pointer; }
+  .cookie-banner .ok { background: #4f46e5; color: #fff; }
+  .cookie-banner .no { background: #374151; color: #e5e7eb; }
+  .chat-widget {
+    position: fixed; right: 20px; bottom: 20px; width: 46px; height: 46px; border-radius: 50%;
+    background: #4f46e5; color: #fff; display: grid; place-items: center; font-size: 18px;
+    box-shadow: 0 10px 24px rgba(79,70,229,.4); z-index: 30;
+  }
+  .footer-promo { margin-top: 14px; font-size: 11.5px; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+  .grid2 .card { margin-top: 0; }
+  .chart { padding: 8px 12px 12px; }
+  .chart svg { display: block; width: 100%; height: auto; }
+  .chart .area { fill: url(#g1); opacity: .55; }
+  .chart .line { fill: none; stroke: #9ca3af; stroke-width: 2.2; stroke-linecap: round; }
+  .chart .grid { stroke: #eef0f4; stroke-width: 1; }
+  .alerts { list-style: none; margin: 0; padding: 6px 12px 10px; display: grid; gap: 8px; font-size: 12px; }
+  .alerts li { display: flex; align-items: center; gap: 8px; color: #4b5563; }
+  .alerts .lvl { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; flex: 0 0 auto; }
+  .alerts .time { margin-left: auto; color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">◆</span> Acme Cloud <span class="env">prod</span></div>
+    <nav class="tabs">
+      <a class="active">概览</a><a>实例</a><a>日志</a><a>账单</a><a>团队</a>
+    </nav>
+    <div class="top-actions">
+      <span>⌘K 搜索</span>
+      <span class="avatar"></span>
+    </div>
+  </header>
+
+  <div class="promo-banner">🎉 双十一狂欢：新用户首月 5 折，仅剩 2 天 · 立即领取 →</div>
+
+  <div class="wrap">
+    <aside class="side">
+      <div class="side-title">工作区</div>
+      <ul>
+        <li class="active"><span class="dot"></span>概览</li>
+        <li><span class="dot"></span>实例列表</li>
+        <li><span class="dot"></span>镜像</li>
+        <li><span class="dot"></span>网络</li>
+        <li><span class="dot"></span>负载均衡</li>
+        <li><span class="dot"></span>监控告警</li>
+        <li><span class="dot"></span>账单中心</li>
+        <li><span class="dot"></span>成员管理</li>
+        <li><span class="dot"></span>操作审计</li>
+        <li><span class="dot"></span>API 密钥</li>
+      </ul>
+      <div class="upsell">升级到 Pro，解锁多集群与审计日志<br />→ 查看权益</div>
+    </aside>
+
+    <main>
+      <h1>概览</h1>
+      <div class="stats">
+        <div class="stat"><div class="k">运行中实例</div><div class="v">42</div><div class="d">+3 今日</div></div>
+        <div class="stat"><div class="k">CPU 使用率</div><div class="v">63%</div><div class="d">-2%</div></div>
+        <div class="stat"><div class="k">本月花费</div><div class="v">¥ 8,420</div><div class="d">+6%</div></div>
+        <div class="stat"><div class="k">告警</div><div class="v">2</div><div class="d" style="color:#b45309">待处理</div></div>
+      </div>
+
+      <section class="card">
+        <h2>最近部署</h2>
+        <table>
+          <thead><tr><th>服务</th><th>环境</th><th>版本</th><th>状态</th><th>更新时间</th></tr></thead>
+          <tbody>
+            <tr><td>api-gateway</td><td>prod</td><td>v2.14.3</td><td><span class="pill">运行中</span></td><td>2 分钟前</td></tr>
+            <tr><td>order-service</td><td>prod</td><td>v1.8.0</td><td><span class="pill">运行中</span></td><td>18 分钟前</td></tr>
+            <tr><td>web-console</td><td>staging</td><td>v0.9.12</td><td><span class="pill warn">部署中</span></td><td>26 分钟前</td></tr>
+            <tr><td>payment-worker</td><td>prod</td><td>v3.1.7</td><td><span class="pill">运行中</span></td><td>1 小时前</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <div class="grid2">
+        <section class="card chart">
+          <h2>请求量 · 近 24 小时</h2>
+          <div style="padding: 6px 4px 0">
+            <svg viewBox="0 0 600 170" preserveAspectRatio="none" role="img" aria-label="请求量">
+              <defs>
+                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#6366f1" stop-opacity=".55" />
+                  <stop offset="100%" stop-color="#22d3ee" stop-opacity="0" />
+                </linearGradient>
+                <linearGradient id="g2" x1="0" y1="1" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#818cf8" />
+                  <stop offset="100%" stop-color="#22d3ee" />
+                </linearGradient>
+              </defs>
+              <line class="grid" x1="0" y1="42" x2="600" y2="42" />
+              <line class="grid" x1="0" y1="84" x2="600" y2="84" />
+              <line class="grid" x1="0" y1="126" x2="600" y2="126" />
+              <path class="area" d="M0,120 L40,104 L80,112 L120,86 L160,96 L200,70 L240,78 L280,52 L320,64 L360,44 L400,58 L440,38 L480,52 L520,30 L560,40 L600,26 L600,170 L0,170 Z" />
+              <path class="line" d="M0,120 L40,104 L80,112 L120,86 L160,96 L200,70 L240,78 L280,52 L320,64 L360,44 L400,58 L440,38 L480,52 L520,30 L560,40 L600,26" />
+            </svg>
+          </div>
+        </section>
+        <section class="card">
+          <h2>告警</h2>
+          <ul class="alerts">
+            <li><span class="lvl"></span>order-service 延迟升高 <span class="time">3 分钟前</span></li>
+            <li><span class="lvl"></span>web-console 部署失败 <span class="time">26 分钟前</span></li>
+            <li><span class="lvl" style="background:#22c55e"></span>payment-worker 已恢复 <span class="time">1 小时前</span></li>
+            <li><span class="lvl" style="background:#22c55e"></span>api-gateway 扩容完成 <span class="time">2 小时前</span></li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="ad-slot">广告位 · 云厂商推广</div>
+      <div class="footer-promo">© Acme Cloud · 服务条款 · 隐私政策 · 加入我们</div>
+    </main>
+  </div>
+
+  <div class="cookie-banner">
+    我们使用 Cookie 来改善体验并投放个性化内容。
+    <div class="row"><button class="ok">全部接受</button><button class="no">仅必要</button></div>
+  </div>
+  <div class="chat-widget">💬</div>
+</body>
+</html>

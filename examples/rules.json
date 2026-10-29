@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "hide-cookie-banner",
+      "name": "隐藏 Cookie 横幅",
+      "desc": "常见的 cookie / 隐私提示条",
+      "match": ["*://*/*"],
+      "exclude": [],
+      "world": "ISOLATED",
+      "order": 10,
+      "enabled": false,
+      "css": "[id*=\"cookie\" i][class*=\"banner\" i],\n[class*=\"cookie-consent\" i],\n[class*=\"gdpr\" i] {\n  display: none !important;\n}\n",
+      "js": ""
+    },
+    {
+      "id": "hide-sticky-footer",
+      "name": "去掉底部固定条",
+      "desc": "很多站点底部有一层挡住内容的悬浮条",
+      "match": ["*://*/*"],
+      "exclude": [],
+      "world": "ISOLATED",
+      "order": 20,
+      "enabled": false,
+      "css": "body > div[style*=\"position: fixed\"][style*=\"bottom\"] {\n  display: none !important;\n}\n",
+      "js": ""
+    },
+    {
+      "id": "example-remove-promo",
+      "name": "示例：删除推广卡片",
+      "desc": "等元素出现后从 DOM 里删掉，适合懒加载的组件",
+      "match": ["https://example.com/*"],
+      "exclude": [],
+      "world": "ISOLATED",
+      "order": 100,
+      "enabled": false,
+      "css": "",
+      "js": "const card = await tweak.waitFor(\".promo-card\");\nif (card) {\n  card.remove();\n  tweak.log(\"已移除推广卡片\");\n}\n"
+    },
+    {
+      "id": "example-log-routes",
+      "name": "示例：记录 SPA 路由",
+      "desc": "路由变化时打日志，方便写更复杂的规则",
+      "match": ["https://example.com/*"],
+      "exclude": [],
+      "world": "ISOLATED",
+      "order": 200,
+      "enabled": false,
+      "css": "",
+      "js": "tweak.onRoute(({ from, to }) => tweak.log(\"route\", from, \"→\", to));\n"
+    }
+  ]
+}

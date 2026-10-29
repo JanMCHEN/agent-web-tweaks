@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="studio.css" />
+  <title>Agent Web Tweaks · 工作台</title>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="../../icons/icon48.png" alt="" />
+        <div class="brand-text">
+          <div class="brand-name">Agent Web Tweaks</div>
+          <div class="brand-sub" id="bridgeSub">本地桥未连接</div>
+        </div>
+        <button class="icon-btn" id="settingsBtn" title="连接与设置">⚙</button>
+      </div>
+
+      <div class="search">
+        <input id="searchInput" type="search" placeholder="搜索规则 / URL…" />
+        <button class="primary small" id="newBtn">新建</button>
+      </div>
+
+      <div class="list-tools">
+        <button class="link" id="selectToggle">批量</button>
+        <span class="spacer"></span>
+        <span class="muted" id="ruleTotal">0 条</span>
+      </div>
+
+      <div class="batch-bar" id="batchBar" hidden>
+        <label class="check-all"><input type="checkbox" id="selectAll" /> 全选</label>
+        <span class="muted" id="selCount">已选 0</span>
+        <span class="spacer"></span>
+        <button class="ghost small" data-batch="enable">启用</button>
+        <button class="ghost small" data-batch="disable">停用</button>
+        <button class="ghost small danger" data-batch="delete">删除</button>
+      </div>
+
+      <div class="list" id="ruleList"></div>
+
+      <div class="sidebar-foot">
+        <button class="ghost small" id="importBtn">导入</button>
+        <button class="ghost small" id="exportBtn">导出</button>
+      </div>
+    </aside>
+
+    <main class="editor" id="editor" hidden>
+      <div class="editor-head">
+        <div class="title-wrap">
+          <input id="nameInput" class="name-input" placeholder="规则名称" spellcheck="false" />
+          <div class="id-line">
+            <code id="idText">-</code>
+            <button class="link" id="renameBtn">改 id</button>
+            <span class="saved" id="savedHint"></span>
+          </div>
+        </div>
+        <div class="head-actions">
+          <label class="switch" title="启用">
+            <input type="checkbox" id="enabledInput" />
+            <span></span>
+          </label>
+          <button class="primary" id="saveBtn">保存并应用</button>
+          <button class="icon-btn" id="moreBtn" title="更多">⋯</button>
+        </div>
+      </div>
+
+      <div class="meta">
+        <label class="field">
+          <span>匹配 URL（每行一条，支持 * 与 ?）</span>
+          <textarea id="matchInput" rows="2" spellcheck="false" placeholder="https://example.com/*"></textarea>
+        </label>
+        <label class="field">
+          <span>排除</span>
+          <textarea id="excludeInput" rows="1" spellcheck="false" placeholder="https://example.com/admin/*"></textarea>
+        </label>
+        <div class="field-row">
+          <label class="field narrow">
+            <span>执行世界</span>
+            <select id="worldSelect">
+              <option value="ISOLATED">ISOLATED（默认）</option>
+              <option value="MAIN">MAIN（需要用户脚本）</option>
+            </select>
+          </label>
+          <label class="field narrow">
+            <span>顺序</span>
+            <input id="orderInput" type="number" step="10" />
+          </label>
+          <label class="field grow">
+            <span>描述</span>
+            <input id="descInput" placeholder="这条规则是做什么的？" />
+          </label>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="css">CSS</button>
+        <button class="tab" data-tab="js">JavaScript</button>
+        <button class="tab" data-tab="notes">备注</button>
+        <span class="spacer"></span>
+        <span class="muted" id="sizeHint"></span>
+      </div>
+
+      <div class="code-wrap">
+        <div class="gutter" id="gutter">1</div>
+        <textarea id="codeInput" spellcheck="false" wrap="off"></textarea>
+        <textarea id="notesInput" spellcheck="false" hidden></textarea>
+      </div>
+
+      <div class="statusbar">
+        <div class="match-test">
+          <input id="testInput" placeholder="粘贴一个 URL 测试是否命中…" spellcheck="false" />
+          <span class="badge" id="testResult">—</span>
+        </div>
+        <span class="spacer"></span>
+        <span class="muted" id="statusText"></span>
+      </div>
+    </main>
+
+    <main class="welcome" id="welcome" hidden>
+      <div class="welcome-inner">
+        <img src="../../icons/icon128.png" alt="" class="welcome-logo" />
+        <h1>给任意网页打补丁</h1>
+        <p class="welcome-sub">一条规则 = URL 通配符 + 一段 CSS 或 JS。保存即生效，关掉浏览器再打开也还在。</p>
+        <ol class="steps">
+          <li><b>新建</b>：选个模板，或直接写 CSS / JS</li>
+          <li><b>拾取</b>：在页面上点一下要改的元素，自动生成选择器</li>
+          <li><b>交给 agent</b>：启动本地桥，MCP 里就能读写同一套规则</li>
+        </ol>
+        <div class="welcome-actions">
+          <button class="primary" id="welcomeNew">新建第一条规则</button>
+          <button class="ghost" id="welcomePick">先从页面上拾取元素</button>
+        </div>
+        <div class="welcome-hint">可定制的页面：<span id="welcomeUrl">-</span></div>
+      </div>
+    </main>
+
+    <aside class="rail" id="rail">
+      <section class="card warn-card" id="usCard" hidden>
+        <div class="card-head">JS 规则还没启用</div>
+        <p class="hint">Chrome 需要你在扩展详情里打开「允许用户脚本」，否则规则里的 JS 不会执行（CSS 正常）。</p>
+        <div class="row" style="display:flex;gap:6px">
+          <button class="primary small" id="usOpenBtn">去开启</button>
+          <button class="ghost small" id="usRecheckBtn">重新检测</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head" id="railHead">当前标签页</div>
+        <div class="page-title" id="railTitle">-</div>
+        <div class="page-url" id="railUrl">-</div>
+        <div class="rail-actions">
+          <button class="ghost small" id="pickBtn">拾取元素</button>
+          <button class="ghost small" id="reloadBtn">刷新状态</button>
+        </div>
+      </section>
+
+      <section class="card" id="errorCard" hidden>
+        <div class="card-head">规则报错</div>
+        <div class="errors" id="errorList"></div>
+      </section>
+
+      <section class="card" id="pickCard" hidden>
+        <div class="card-head">
+          拾取结果
+          <button class="link" id="pickUseBtn">用于当前规则</button>
+        </div>
+        <div class="pick-selector" id="pickSelector"></div>
+        <div class="pick-meta" id="pickMeta"></div>
+        <div class="chips">
+          <button class="chip" data-act="hide">隐藏</button>
+          <button class="chip" data-act="remove">删除</button>
+          <button class="chip" data-act="text">改文案</button>
+          <button class="chip" data-act="copy">复制选择器</button>
+          <button class="chip" data-act="agent">复制给 agent</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">给 agent 用</div>
+        <p class="hint">同一套规则能力通过本地桥暴露成 MCP 工具，任何支持 MCP 的 agent 都能直接读写规则、读页面、点选元素。</p>
+        <pre class="snippet" id="mcpSnippet"></pre>
+        <button class="ghost small" id="copyMcpBtn">复制 MCP 配置</button>
+      </section>
+    </aside>
+  </div>
+
+  <div class="modal" id="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="modalTitle">设置</h3>
+        <button class="icon-btn" id="modalClose">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="studio.js"></script>
+</body>
+</html>
