@@ -45,6 +45,8 @@ node scripts/awt.mjs call rules.save '{"rule":{"id":"hide-promo","name":"去掉�
 - 规则 JS 在 `document_start` 执行，此时 `document.body` 可能还不存在 —— 用 `tweak.ready(...)` 或 `await tweak.waitFor(...)`
 - JS 里可用 `tweak.$ / $$ / waitFor / waitForText / observe / css / ready / onRoute / onCleanup / store / log`
 - `world: "MAIN"` 才拿得到页面自己的全局变量、才能 hook `window.fetch`；默认用 `ISOLATED`
+- 需要跨域请求用 `await tweak.fetch(url)`（走扩展身份，不受 CORS 限制）；目标域名要先在工作台 → 设置 → 跨域请求里授权
+- 用户给的是 `.user.js` 时，工作台「导入」可直接转成规则（`@match`/`@grant` 自动映射，带 GM_* 兼容层）
 - 字段与配方见 `references/rules.md`，工具参数见 `references/tools.md`
 
 ## 约束

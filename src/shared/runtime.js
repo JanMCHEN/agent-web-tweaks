@@ -60,6 +60,53 @@ export function buildRuleScript(rule, env, world = "USER_SCRIPT") {
   };
   const clearNote = () => { try { localStorage.removeItem(ERROR_KEY); } catch (e) {} };
 
+  // 跨域请求走 DOM 事件中转：规则脚本在 USER_SCRIPT/MAIN 世界没有 chrome.*，
+  // 由内容脚本转给 background，用扩展权限发起 fetch（不受 CORS 限制）。
+  const httpPending = new Map();
+  let httpSeq = 0;
+  const onHttpResult = (event) => {
+    let payload = null;
+    try { payload = JSON.parse(String(event.detail || "")); } catch (e) { return; }
+    const entry = payload && httpPending.get(payload.id);
+    if (!entry) return;
+    httpPending.delete(payload.id);
+    clearTimeout(entry.timer);
+    if (payload.error) entry.reject(new Error(payload.error));
+    else entry.resolve(payload);
+  };
+  try { window.addEventListener("awt:http-result", onHttpResult); } catch (e) {}
+  add(() => { try { window.removeEventListener("awt:http-result", onHttpResult); } catch (e) {} });
+
+  const request = (url, options) => {
+    const opts = options || {};
+    const id = "h" + (++httpSeq) + "-" + Math.random().toString(36).slice(2, 8);
+    const timeout = Math.max(1000, Number(opts.timeout) || 20000);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        httpPending.delete(id);
+        reject(new Error("fetch 超时：" + url));
+      }, timeout + 500);
+      httpPending.set(id, { resolve, reject, timer });
+      try {
+        window.dispatchEvent(new CustomEvent("awt:http-request", {
+          detail: JSON.stringify({
+            id: id,
+            url: String(url),
+            method: opts.method || "GET",
+            headers: opts.headers || {},
+            body: opts.body == null ? null : (typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body)),
+            credentials: opts.credentials,
+            timeout: timeout,
+          }),
+        }));
+      } catch (e) {
+        httpPending.delete(id);
+        clearTimeout(timer);
+        reject(e);
+      }
+    });
+  };
+
   const routeHooks = new Set();
 
   const tweak = {
@@ -151,6 +198,20 @@ export function buildRuleScript(rule, env, world = "USER_SCRIPT") {
       return add(() => routeHooks.delete(fn));
     },
     log: (...args) => { try { console.log("[awt:" + META.id + "]", ...args); } catch (e) {} },
+    // 跨域请求：由 background 用扩展权限发（不受页面 CORS 限制），需要用户在工作台里授权域名
+    fetch: async (url, options) => {
+      const res = await request(url, options);
+      return {
+        ok: !!res.ok,
+        status: Number(res.status) || 0,
+        statusText: res.statusText || "",
+        url: res.url || String(url),
+        headers: res.headers || {},
+        headersText: res.headersText || "",
+        text: res.text == null ? "" : String(res.text),
+        json() { return JSON.parse(res.text == null ? "null" : String(res.text)); },
+      };
+    },
     store: {
       get(key, fallback) {
         try {
@@ -162,6 +223,14 @@ export function buildRuleScript(rule, env, world = "USER_SCRIPT") {
         try {
           const all = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
           all[key] = value;
+          localStorage.setItem(STORE_KEY, JSON.stringify(all));
+          return true;
+        } catch (e) { return false; }
+      },
+      remove(key) {
+        try {
+          const all = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+          delete all[key];
           localStorage.setItem(STORE_KEY, JSON.stringify(all));
           return true;
         } catch (e) { return false; }
@@ -178,6 +247,49 @@ export function buildRuleScript(rule, env, world = "USER_SCRIPT") {
   };
 
   async function run(tweakApi, env) {
+  // ---- 用户脚本兼容（.user.js 导入的脚本经常直接用这些） ----
+  var unsafeWindow = window;
+  var GM_info = {
+    script: { name: META.name, version: "", description: "", namespace: "" },
+    scriptHandler: "Agent Web Tweaks",
+    version: "0.1.0",
+  };
+  var GM_addStyle = function (css) { return tweakApi.css(css); };
+  var GM_getValue = function (key, fallback) { return tweakApi.store.get(key, fallback); };
+  var GM_setValue = function (key, value) { return tweakApi.store.set(key, value); };
+  var GM_deleteValue = function (key) { return tweakApi.store.remove(key); };
+  var GM_listValues = function () { return Object.keys(tweakApi.store.get() || {}); };
+  var GM_log = function () { return tweakApi.log.apply(null, arguments); };
+  var GM_openInTab = function (url) { return window.open(url, "_blank"); };
+  var GM_xmlhttpRequest = function (details) {
+    var d = details || {};
+    var aborted = false;
+    tweakApi.fetch(d.url, {
+      method: d.method || "GET",
+      headers: d.headers,
+      body: d.data == null ? undefined : d.data,
+      timeout: d.timeout,
+      credentials: d.withCredentials ? "include" : undefined,
+    }).then(function (res) {
+      if (aborted) return;
+      var response = {
+        readyState: 4,
+        status: res.status,
+        statusText: res.statusText,
+        finalUrl: res.url,
+        responseText: res.text,
+        response: res.text,
+        responseHeaders: res.headersText,
+      };
+      if (d.onload) d.onload(response);
+      if (d.onreadystatechange) d.onreadystatechange(response);
+    }).catch(function (err) {
+      if (aborted) return;
+      if (d.onerror) d.onerror({ error: String((err && err.message) || err), status: 0 });
+      else tweakApi.log("GM_xmlhttpRequest 失败", err);
+    });
+    return { abort: function () { aborted = true; } };
+  };
 ${body}
   }
 

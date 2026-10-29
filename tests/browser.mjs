@@ -5,6 +5,7 @@ import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import { userScriptToRule } from "../src/shared/userscript.js";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,6 +37,11 @@ const server = http.createServer((req, res) => {
     <script nonce="testnonce">window.__pageMarker = "page-var";</script>
   </body></html>`);
 }).listen(PORT);
+
+const crossOrigin = http.createServer((req, res) => {
+  res.writeHead(200, { "content-type": "application/json" }); // 故意不带 CORS 头
+  res.end(JSON.stringify({ hello: "world" }));
+}).listen(8900);
 
 const bridge = spawn(process.execPath, [path.join(root, "bridge/bridge.mjs"), "--port", String(BRIDGE_PORT), "--quiet"], { stdio: ["ignore", "ignore", "inherit"] });
 
@@ -195,6 +201,58 @@ async function main() {
   const afterRemove = await page.evaluate(() => getComputedStyle(document.getElementById("headline")).display);
   check("撤销后恢复", afterRemove !== "none", true);
 
+  // 跨域请求：未授权 → 明确报错；授权后 → 拿到数据
+  const now2 = Date.now();
+  await worker.evaluate(async (rule) => {
+    const map = (await chrome.storage.local.get(["awt.rules.v1"]))["awt.rules.v1"] || {};
+    map[rule.id] = rule;
+    await chrome.storage.local.set({ "awt.rules.v1": map });
+  }, {
+    id: "test-cross",
+    name: "跨域测试",
+    match: [`http://127.0.0.1:${PORT}/*`],
+    css: "",
+    world: "ISOLATED",
+    enabled: true,
+    order: 200,
+    updatedAt: now2,
+    createdAt: now2,
+    js: `try {
+  const r = await tweak.fetch("http://127.0.0.1:8900/data");
+  document.documentElement.setAttribute("data-cross", r.status + ":" + r.text);
+} catch (e) {
+  document.documentElement.setAttribute("data-cross", "ERR:" + e.message);
+}`,
+  });
+  await sleep(600);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await sleep(900);
+  check("未授权的跨域请求被拒绝", /^ERR:跨域请求未授权/.test(String(await page.evaluate(() => document.documentElement.getAttribute("data-cross")))), true);
+
+  await worker.evaluate(async () => {
+    await chrome.storage.local.set({ "awt.proxyRules.v1": [{ pattern: "http://127.0.0.1:8900/*", methods: ["GET"], credentials: "omit" }] });
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await sleep(900);
+  check("授权后拿到跨域数据", String(await page.evaluate(() => document.documentElement.getAttribute("data-cross"))), '200:{"hello":"world"}');
+
+  // .user.js 导入 → GM_addStyle 兼容层
+  const usRule = userScriptToRule(`// ==UserScript==
+// @name Hide Headline
+// @match http://127.0.0.1:${PORT}/*
+// @grant GM_addStyle
+// ==/UserScript==
+GM_addStyle('#headline{display:none!important}');`, { filename: "hide.user.js" }).rule;
+  await worker.evaluate(async (rule) => {
+    const map = (await chrome.storage.local.get(["awt.rules.v1"]))["awt.rules.v1"] || {};
+    map[rule.id] = rule;
+    await chrome.storage.local.set({ "awt.rules.v1": map });
+  }, usRule);
+  await sleep(600);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await sleep(800);
+  check("导入的用户脚本 GM_addStyle 生效", await page.evaluate(() => getComputedStyle(document.getElementById("headline")).display), "none");
+
   // UI 冒烟
   const studio = await browser.newPage();
   const studioErrors = [];
@@ -232,6 +290,7 @@ main()
   .finally(() => {
     bridge.kill();
     server.close();
+  crossOrigin.close();
     console.log(`\n${pass} 通过，${fail} 失败`);
     process.exit(fail ? 1 : 0);
   });

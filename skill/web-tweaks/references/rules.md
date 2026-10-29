@@ -41,6 +41,7 @@ CSS 在 `document_start` 就注入，基本不闪。JS 也在 `document_start` �
 | `tweak.onRoute(fn)` | SPA 路由变化（`{ from, to }`） |
 | `tweak.onCleanup(fn)` | 规则被停用/删除/不再匹配时执行 |
 | `tweak.store.get/set(key)` | 每条规则一份持久小存储（页面 origin 的 localStorage） |
+| `tweak.fetch(url, opts)` | 跨域请求：由扩展身份发出，不受页面 CORS 限制；目标域名要先在工作台 → 设置 → 跨域请求里授权 |
 | `tweak.log(...)` | 带规则 id 的日志 |
 | `tweak.env` | 扩展里配置的环境变量（`awt.settings.v1.env`） |
 
@@ -112,3 +113,32 @@ tweak.onCleanup(() => { window.fetch = original; });
 - 页面控制台里搜 `[awt:<id>]`
 - 改完没效果：确认 `awt status` 里 `userScripts: true`，且 URL 真的命中 `match`
 - `document.body` 为 `null`：这是 `document_start` 的正常时序，改用 `tweak.ready`
+
+## 从 Tampermonkey 迁移
+
+工作台「导入」可以直接选 `.user.js`：`@name` / `@description` / `@match` / `@include` / `@exclude` / `@grant` 会被解析成规则字段，并自动提供这些兼容实现：
+
+- `GM_addStyle` → `tweak.css`
+- `GM_getValue` / `GM_setValue` / `GM_deleteValue` / `GM_listValues` → `tweak.store`
+- `GM_log` → `tweak.log`
+- `GM_xmlhttpRequest` → `tweak.fetch`（回调式包装）
+- `unsafeWindow`（MAIN 世界就是页面 window）
+
+`@require` 不会下载、正则形式的 `@match` 会跳过、`@run-at` 统一按 `document_start` 处理——导入时会给出提示。
+
+## 跨域请求
+
+```js
+const res = await tweak.fetch("https://api.example.com/data", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: { hello: "world" },
+  timeout: 15000,
+});
+if (res.ok) tweak.log(await res.json());
+```
+
+- 同源请求默认放行；跨域需要在**工作台 → 设置 → 跨域请求**里加 URL 通配符（如 `https://api.example.com/*`）
+- 未授权时会抛 `跨域请求未授权：https://api.example.com`，把域名加进去即可
+- 是否携带 Cookie 由设置里的开关决定（`credentials: include|omit`）
+- 只支持 http/https；GET/HEAD/POST/PUT/PATCH/DELETE；请求体上限 1MB、超时上限 60s

@@ -1,4 +1,5 @@
 import { TEMPLATES, slugId, isValidId, ruleMatches } from "../shared/core.js";
+import { looksLikeUserScript, userScriptToRule } from "../shared/userscript.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -546,7 +547,7 @@ function templateModal() {
   });
 }
 
-function settingsModal() {
+async function settingsModal() {
   const settings = app.settings || {};
   const help = [
     "{",
@@ -563,6 +564,10 @@ function settingsModal() {
     '  -H "content-type: application/json" \\',
     `  -d '{"tool":"rules.list","args":{}}'`,
   ].join("\n");
+
+  const proxy = await send("awt:proxy-rules").catch(() => ({ rules: [] }));
+  const proxyPatterns = (proxy.rules || []).map((r) => r.pattern).join("\n");
+  const proxyCreds = (proxy.rules || []).some((r) => r.credentials === "include");
 
   openModal("连接与设置", `
     <div class="field-row">
@@ -586,6 +591,14 @@ function settingsModal() {
       <button class="ghost" id="setRestartBtn">重启桥连接</button>
       <span class="muted" id="setBridgeState">${app.bridge && app.bridge.connected ? "已连接" : "未连接"}</span>
     </div>
+    <div class="field">
+      <span>跨域请求（一行一个 URL 通配符，空 = 只允许同源）</span>
+      <textarea id="setProxyRules" rows="3" placeholder="https://api.github.com/*">${escapeHtml(proxyPatterns)}</textarea>
+    </div>
+    <div class="row">
+      <label class="switch"><input type="checkbox" id="setProxyCreds" ${proxyCreds ? "checked" : ""} /><span></span></label>
+      <span>跨域请求携带 Cookie（credentials: include）</span>
+    </div>
     <div class="field"><span>任意 agent 的接入方式</span><pre class="snippet">${escapeHtml(help)}</pre></div>
   `);
 
@@ -601,6 +614,13 @@ function settingsModal() {
         },
       });
       app.settings = result.settings;
+      const patterns = $("setProxyRules").value.split("\n").map((line) => line.trim()).filter(Boolean);
+      await send("awt:set-proxy-rules", {
+        rules: patterns.map((pattern) => ({
+          pattern,
+          credentials: $("setProxyCreds").checked ? "include" : "omit",
+        })),
+      });
       toast("已保存");
       setTimeout(load, 600);
     } catch (e) {
@@ -718,14 +738,30 @@ async function exportRules() {
 function importRules() {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = "application/json,.json";
+  input.accept = "application/json,.json,.user.js,.js,text/javascript";
   input.addEventListener("change", async () => {
     const file = input.files && input.files[0];
     if (!file) return;
     const text = await file.text();
     try {
+      if (looksLikeUserScript(text)) {
+        const { rule, warnings } = userScriptToRule(text, { filename: file.name });
+        const saved = await send("awt:save-rule", { rule, apply: true });
+        await load();
+        await selectRule(saved.rule.id);
+        if (warnings.length) {
+          openModal("已导入用户脚本：" + saved.rule.name, `
+            <p class="hint">脚本已经变成一条规则，但下面这些点需要你知道：</p>
+            <ul class="warn-list">${warnings.map((w) => "<li>" + escapeHtml(w) + "</li>").join("")}</ul>
+            <p class="hint">导入的是本地拷贝，不会跟随原脚本更新。</p>
+          `);
+        } else {
+          toast("已导入用户脚本：" + saved.rule.name);
+        }
+        return;
+      }
       const out = await send("awt:import", { data: text, mode: "merge" });
-      toast("已导入 " + out.imported + " 条");
+      toast("已导入 " + out.imported + " 条规则");
       await load();
     } catch (e) {
       toast("导入失败：" + e.message, true);
@@ -823,7 +859,7 @@ $("batchBar").addEventListener("click", async (event) => {
   }
 });
 $("newBtn").addEventListener("click", templateModal);
-$("settingsBtn").addEventListener("click", settingsModal);
+$("settingsBtn").addEventListener("click", () => settingsModal().catch((e) => toast(e.message, true)));
 $("importBtn").addEventListener("click", importRules);
 $("exportBtn").addEventListener("click", () => exportRules().catch((e) => toast(e.message, true)));
 

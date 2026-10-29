@@ -13,6 +13,7 @@ import {
   sortRules,
   ruleSummary,
   dedupeRules,
+  matchesPattern,
   isValidId,
   slugId,
 } from "./shared/core.js";
@@ -709,6 +710,110 @@ return { ok: true, found: false, waitedMs: Date.now() - started, selector: sel |
   return { tabId: tab.id, action: "waitFor", ...(out.value || {}), ...(await pageSnapshot(tab.id)) };
 }
 
+// ---------- 跨域请求（规则里 tweak.fetch / GM_xmlhttpRequest） ----------
+// 规则脚本没有扩展权限，请求由内容脚本转到这里，用扩展身份发出，因此不受页面 CORS 限制。
+// 跨域目标必须先在「工作台 → 设置 → 跨域请求」里授权，避免任意脚本把数据发到未知域名。
+const PROXY_RULES_KEY = "awt.proxyRules.v1";
+
+async function getProxyRules() {
+  const stored = await chrome.storage.local.get([PROXY_RULES_KEY]);
+  const list = stored[PROXY_RULES_KEY];
+  return Array.isArray(list) ? list : [];
+}
+
+function normalizeProxyRules(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((item) => {
+      const pattern = String((item && item.pattern) || "").trim();
+      if (!pattern) return null;
+      const methods = Array.isArray(item.methods) && item.methods.length
+        ? item.methods.map((m) => String(m).toUpperCase())
+        : ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
+      return { pattern, methods, credentials: item.credentials === "include" ? "include" : "omit" };
+    })
+    .filter(Boolean);
+}
+
+async function setProxyRules(list) {
+  const rules = normalizeProxyRules(list);
+  await chrome.storage.local.set({ [PROXY_RULES_KEY]: rules });
+  return rules;
+}
+
+function sanitizeHeaders(input) {
+  const out = {};
+  if (!input || typeof input !== "object") return out;
+  for (const [key, value] of Object.entries(input)) {
+    const lower = String(key).toLowerCase();
+    if (["cookie", "host", "origin", "referer", "content-length"].includes(lower)) continue;
+    out[key] = String(value);
+  }
+  return out;
+}
+
+async function proxyFetch(request, sender) {
+  let url;
+  try {
+    url = new URL(String((request && request.url) || ""));
+  } catch {
+    throw new Error("URL 不合法：" + (request && request.url));
+  }
+  if (!/^https?:$/.test(url.protocol)) throw new Error("只支持 http/https 请求");
+  const method = String((request && request.method) || "GET").toUpperCase();
+  if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    throw new Error("不支持的 method：" + method);
+  }
+
+  const pageUrl = (sender && sender.tab && sender.tab.url) || "";
+  let sameOrigin = false;
+  try { sameOrigin = new URL(pageUrl).origin === url.origin; } catch {}
+
+  const rules = await getProxyRules();
+  const rule = rules.find((item) => matchesPattern(item.pattern, url.toString())
+    && (item.methods || []).includes(method));
+  if (!sameOrigin && !rule) {
+    throw new Error("跨域请求未授权：" + url.origin + "。在工作台 → 设置 → 跨域请求里加一条 " + url.origin + "/*");
+  }
+
+  const credentials = request.credentials || (rule && rule.credentials) || (sameOrigin ? "include" : "omit");
+  const body = request.body == null ? undefined : String(request.body);
+  if (body && body.length > 1024 * 1024) throw new Error("请求体超过 1MB");
+  const timeout = Math.min(60000, Math.max(1000, Number(request.timeout) || 20000));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const resp = await fetch(url.toString(), {
+      method,
+      credentials,
+      headers: sanitizeHeaders(request.headers),
+      body: ["GET", "HEAD"].includes(method) ? undefined : body,
+      signal: controller.signal,
+      redirect: "follow",
+      cache: "no-store",
+    });
+    const text = await resp.text();
+    const headers = {};
+    resp.headers.forEach((value, key) => { headers[key] = value; });
+    const headersText = Object.entries(headers).map(([k, v]) => k + ": " + v).join("\r\n");
+    const limited = text.length > 2_000_000 ? text.slice(0, 2_000_000) : text;
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      statusText: resp.statusText,
+      url: resp.url,
+      headers,
+      headersText,
+      text: limited,
+      truncated: text.length > limited.length,
+    };
+  } catch (e) {
+    if (e && e.name === "AbortError") throw new Error("请求超时（" + Math.round(timeout / 1000) + "s）");
+    throw new Error("请求失败：" + String((e && e.message) || e));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ---------- 给 agent 的工具 ----------
 async function toolMetaStatus() {
   const rules = await getRules();
@@ -1182,6 +1287,15 @@ async function handleMessage(msg, sender) {
 
     case "awt:screenshot":
       return await screenshot({ tabId: msg.tabId });
+
+    case "awt:fetch":
+      return await proxyFetch(msg.request || {}, sender);
+
+    case "awt:proxy-rules":
+      return { rules: await getProxyRules() };
+
+    case "awt:set-proxy-rules":
+      return { rules: await setProxyRules(msg.rules) };
 
     case "awt:settings": {
       const next = await setSettings(msg.patch || {});

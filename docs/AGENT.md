@@ -58,6 +58,10 @@ tweak.observe(() => {
 // 路由变化（SPA）
 tweak.onRoute(({ from, to }) => tweak.log("route", to));
 
+// 跨域请求（需先在「工作台 → 设置 → 跨域请求」授权域名）
+const res = await tweak.fetch("https://api.example.com/data");
+if (res.ok) tweak.log(await res.json());
+
 // 清理
 tweak.onCleanup(() => console.log("bye"));
 ```

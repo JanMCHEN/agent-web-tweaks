@@ -6,6 +6,7 @@ import {
   normalizeRule, validateRule, ruleMatches, sortRules, globToRegExpSource, dedupeRules,
 } from "../src/shared/core.js";
 import { buildRuleScript } from "../src/shared/runtime.js";
+import { parseUserScript, userScriptToRule, looksLikeUserScript } from "../src/shared/userscript.js";
 import { TOOL_DEFS } from "../src/shared/tools.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -41,6 +42,36 @@ ok("规则脚本可编译", (() => { new Function(buildRuleScript({ id: "m", mat
 ok("MAIN 脚本可编译", (() => { new Function(buildRuleScript({ id: "m2", match: ["*://*/*"], js: "await tweak.waitFor('.x');" }, {}, "MAIN")); return true; })());
 ok("脚本带世界标记", buildRuleScript({ id: "m3", match: [], js: "" }, {}, "MAIN").includes('const WORLD = "MAIN"'));
 check("工具数量", TOOL_DEFS.length, 25);
+
+// ---------- .user.js 解析 ----------
+const sampleScript = `// ==UserScript==
+// @name         Hide Promo Banner
+// @namespace    https://example.com/
+// @version      1.2.0
+// @description  去掉推广条
+// @match        https://example.com/*
+// @match        https://*.example.com/docs/*
+// @exclude      https://example.com/admin/*
+// @grant        GM_addStyle
+// @run-at       document-idle
+// ==/UserScript==
+GM_addStyle('.promo{display:none}');`;
+ok("识别用户脚本", looksLikeUserScript(sampleScript));
+check("解析 @name", parseUserScript(sampleScript).meta.name[0], "Hide Promo Banner");
+const us = userScriptToRule(sampleScript, { filename: "hide.user.js" });
+check("userscript match", us.rule.match, ["https://example.com/*", "https://*.example.com/docs/*"]);
+check("userscript exclude", us.rule.exclude, ["https://example.com/admin/*"]);
+check("有 @grant → ISOLATED", us.rule.world, "ISOLATED");
+ok("脚本体保留", us.rule.js.includes("GM_addStyle"));
+ok("id 合法", /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(us.rule.id));
+ok("有提示（@run-at/@grant）", us.warnings.length >= 2);
+const plain = userScriptToRule(`// ==UserScript==
+// @name Test
+// @match *://*/*
+// ==/UserScript==
+document.title = 'x';`);
+check("无 @grant → MAIN", plain.rule.world, "MAIN");
+check("@match *://*/* 保留", plain.rule.match, ["*://*/*"]);
 
 // ---------- 本地桥 ----------
 const PORT = 8799;

@@ -36,6 +36,8 @@
 | 改完刷新就没了，SPA 切个路由又回来 | 规则持久化 + 路由监听，切走自动撤、切回自动上 |
 | 想让 agent 帮忙改页面，它只能“说”，改不了 | agent 调 `page.context` / `rules.save`，改完还能 `page.screenshot` 验收 |
 | 脚本/插件各有一套格式，agent 学不会 | 规则是一个 JSON：`id / match / css / js / world` |
+| 从 Tampermonkey 搬脚本要手抄元数据 | 工作台「导入」直接读 `.user.js`，`@match` / `@exclude` / `@grant` 自动映射 |
+| 脚本想跨域请求，被 CORS 挡住 | 规则里 `tweak.fetch()` 由扩展身份发出，不受页面 CORS 限制（按域名授权） |
 
 ## 30 秒上手
 
@@ -146,6 +148,23 @@ agent → page.screenshot       # 截图确认
 - `world`：`ISOLATED`（默认，跑在 USER_SCRIPT 隔离世界）/ `MAIN`（页面主世界，可改 `window.fetch`）
 - 规则 JS 在 `document_start` 执行，动 DOM 用 `tweak.ready(...)` 或 `await tweak.waitFor(...)`
 
+### 从 Tampermonkey 迁移
+
+工作台 →「导入」→ 选 `.user.js`：`@match` / `@include` / `@exclude` 映射成规则，`@grant none` 的脚本落到 MAIN 世界，其余落到隔离世界，并自动提供 `GM_addStyle` / `GM_getValue` / `GM_setValue` / `GM_deleteValue` / `GM_listValues` / `GM_log` / `GM_xmlhttpRequest` 的兼容实现。
+
+> `@require` 不会自动下载、正则形式的 `@match` 会跳过——导入时会列出这些提示。
+
+### 跨域请求
+
+```js
+const res = await tweak.fetch("https://api.github.com/repos/…", {
+  headers: { accept: "application/json" },
+});
+const data = await res.json();   // { ok, status, text, json(), headers }
+```
+
+请求由 background 用扩展权限发出，不受页面 CORS 限制；**跨域域名要先在工作台 → 设置 → 跨域请求里授权**（同源默认放行），可以选是否携带 Cookie。
+
 ### `tweak` SDK
 
 | API | 说明 |
@@ -157,6 +176,7 @@ agent → page.screenshot       # 截图确认
 | `tweak.ready(fn)` / `tweak.onRoute(fn)` | DOM 就绪 / SPA 路由变化 |
 | `tweak.onCleanup(fn)` | 规则被停用、删除、不再匹配时执行 |
 | `tweak.store.get/set(key)` | 每条规则一份持久小存储 |
+| `tweak.fetch(url, opts)` | 跨域请求（走扩展身份，按域名授权） |
 | `tweak.log(...)` | 带规则 id 的日志 |
 
 ```js

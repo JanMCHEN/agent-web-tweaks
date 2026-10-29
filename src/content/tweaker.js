@@ -135,6 +135,32 @@
     report();
   }
 
+  // ---------- 跨域请求中转 ----------
+  // 规则脚本（USER_SCRIPT / MAIN 世界）没有 chrome.*，dispatch 一个事件过来，
+  // 这里转给 background 用扩展身份 fetch，再把结果 dispatch 回去。
+  function installHttpBridge() {
+    window.addEventListener("awt:http-request", (event) => {
+      let req = null;
+      try { req = JSON.parse(String(event.detail || "")); } catch { return; }
+      if (!req || !req.id) return;
+      const reply = (payload) => {
+        try {
+          window.dispatchEvent(new CustomEvent("awt:http-result", {
+            detail: JSON.stringify({ id: req.id, ...payload }),
+          }));
+        } catch {}
+      };
+      try {
+        chrome.runtime.sendMessage({ type: "awt:fetch", request: req }).then((resp) => {
+          if (resp && resp.ok === false) reply({ error: resp.error || "请求失败" });
+          else reply((resp && resp.result) || {});
+        }).catch((e) => reply({ error: String((e && e.message) || e) }));
+      } catch (e) {
+        reply({ error: String((e && e.message) || e) });
+      }
+    });
+  }
+
   // ---------- 生命周期 ----------
   async function reload() {
     let data;
@@ -209,5 +235,6 @@
     refresh: reload,
   };
 
+  installHttpBridge();
   reload();
 })();
